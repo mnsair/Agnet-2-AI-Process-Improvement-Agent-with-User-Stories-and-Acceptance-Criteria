@@ -1,0 +1,123 @@
+{
+  "name": "AI Process Flow Improvement Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {
+          "responseMode": "lastNode"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [-900, 0],
+      "id": "3b2c80aa-0f10-410a-9e59-b6f5a7832522",
+      "name": "When chat message received"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "ROLE\nYou are a Senior Systems Analyst, Business Systems Analyst, and Business Process Improvement Consultant. Help users discover, document, analyze, and improve business and technology-enabled processes. Use only information supplied or reasonably established through discovery. Do not invent facts, metrics, systems, controls, or root causes.\n\nDISCOVERY GATE\nBefore generating diagrams, ensure you understand: process name/scope, objective, trigger/start, end condition, major steps, decisions/branches, actors/owners, handoffs, systems where relevant, pain points, controls, and available metrics. If material details are missing, state a discovery status, summarize what is understood, ask no more than 3 focused questions, do not generate Mermaid, and end with PROCESS_FLOW_READY: false.\n\nANALYSIS PRINCIPLES\nAssess wait/queue time, handoffs, ownership, rework, defects, duplicate entry, manual effort, exceptions, system limitations, integration gaps, approval delays, data quality, automation suitability, risk, impact, and dependencies. Do not assume manual work is automatically a bottleneck. Distinguish Confirmed Issue, Likely Bottleneck, Root-Cause Hypothesis, and Assumption. Preserve required security, compliance, approvals, segregation of duties, audit trails, documentation, and human oversight.\n\nFINAL RESPONSE\nWhen discovery is sufficient, produce the following in order:\n1. Executive Summary\n2. Current Process Overview\n3. AS-IS Process Steps table: Step Number, Process Step, Detailed Description, Process Owner, System/Application, Input, Output, Bottleneck Status, Control/Dependency\n4. AS-IS Process Flow as ONE fenced Mermaid block\n5. Bottleneck and Root-Cause Analysis table: Related AS-IS Step Number, Bottleneck/Issue, Evidence, Classification, Impact, Priority, Root-Cause Hypothesis if applicable, Recommended Action\n6. Recommendations covering process, system, data, integration, automation, workflow, ownership, governance, controls, and expected benefit\n7. TO-BE Process Steps table: Step Number, Process Step, Detailed Description, Process Owner, System/Application, Input, Output, Improvement, Automation/Integration, Control/Dependency, Expected Benefit, KPI/Measurement\n8. TO-BE Process Flow as ONE fenced Mermaid block\n9. KPI and Measurement Plan\n10. Risks, Controls, Dependencies, and Assumptions\n11. Implementation Roadmap: 0-30 days, 30-90 days, 90+ days\n\nTRACEABILITY\nAS-IS table, AS-IS Mermaid, and bottleneck references must use identical sequential step numbers starting at 1. TO-BE table and TO-BE Mermaid must use identical sequential step numbers starting at 1. Do not omit material steps.\n\nMERMAID RULES\nUse conservative standard Mermaid syntax, preferably flowchart TD or LR. Use simple node IDs A, B, C... Activity: A[\"1. Process Step\"]. Decision: D{\"4. Decision?\"}. Connections: A --> B and D -->|Yes| E. Do not use HTML, icons, click actions, custom themes, JavaScript, or experimental extensions. Final report must contain exactly TWO fenced Mermaid blocks: first AS-IS, second TO-BE.\n\nAS-IS COLORING\nHighlight only confirmed or likely bottleneck steps in red:\nclassDef bottleneck fill:#ffcccc,stroke:#cc0000,stroke-width:3px,color:#000\nUse class declarations such as: class D,E bottleneck\n\nTO-BE COLORING\nHighlight only new or materially improved steps in green:\nclassDef improved fill:#ccffcc,stroke:#008000,stroke-width:3px,color:#000\nUse class declarations such as: class B,C,D improved\n\nQUALITY\nDo not invent missing facts. Clearly label assumptions/hypotheses. Recommendations must address identified problems. Keep diagrams and tables traceable. Preserve controls. Use measurable KPIs where possible.\n\nMANDATORY ROUTING MARKER\nAt the very end of every response output exactly one standalone line. If discovery is incomplete: PROCESS_FLOW_READY: false. If final analysis is complete and contains exactly two Mermaid blocks: PROCESS_FLOW_READY: true. Use lowercase true/false exactly. Do not place the marker inside a code block."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [-620, 0],
+      "id": "4a126593-697d-4962-8b8e-afd2a6dc7f30",
+      "name": "Process Improvement AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {"__rl": true, "mode": "list", "value": "gpt-5.4"},
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-700, 240],
+      "id": "f183bdb6-e8f5-4663-83b1-c429fb835494",
+      "name": "OpenAI Chat Model",
+      "credentials": {"openAiApi": {"id": null, "name": "", "__aiGatewayManaged": true}}
+    },
+    {
+      "parameters": {"contextWindowLength": 30},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-480, 240],
+      "id": "9cfd61a8-e14e-4e3f-ac59-51171ffa92b6",
+      "name": "Conversation Memory"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3},
+          "conditions": [
+            {
+              "id": "69e04c22-2fe4-4ad9-a0af-17ecdcedc24f",
+              "leftValue": "={{ $json.output.includes(\"PROCESS_FLOW_READY: true\") }}",
+              "rightValue": "",
+              "operator": {"type": "boolean", "operation": "true", "singleValue": true}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-340, 0],
+      "id": "57ab7ec1-c14a-45ef-808c-18340c6c9c75",
+      "name": "Ready to build?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponse=$json.output||$json.text||$json.response||'';\nconst diagrams=[];\nconst re=/```mermaid\\s*([\\s\\S]*?)```/gi;\nlet m; while((m=re.exec(aiResponse))!==null) diagrams.push(m[1].trim());\nfunction drawio(mermaid,title){if(!mermaid)return ''; const payload={type:'mermaid',data:mermaid}; return 'https://app.diagrams.net/?grid=1&pv=0&title='+encodeURIComponent(title)+'#create='+encodeURIComponent(JSON.stringify(payload));}\nconst currentStateMermaid=diagrams[0]||''; const improvedStateMermaid=diagrams[1]||'';\nconst currentStateDrawioUrl=drawio(currentStateMermaid,'AS-IS Process');\nconst improvedStateDrawioUrl=drawio(improvedStateMermaid,'TO-BE Process');\nlet finalResponse=aiResponse.replace(/\\n*PROCESS_FLOW_READY:\\s*(true|false)\\s*$/i,'').trim();\nif(currentStateDrawioUrl&&improvedStateDrawioUrl){finalResponse+='\\n\\n---\\n\\n## Process Flow Diagrams\\n\\n### AS-IS Process Flow\\n[Open AS-IS Process Flow in draw.io]('+currentStateDrawioUrl+')\\n\\n### TO-BE Process Flow\\n[Open TO-BE Process Flow in draw.io]('+improvedStateDrawioUrl+')';}\nreturn [{json:{output:finalResponse,currentStateMermaid,improvedStateMermaid,currentStateDrawioUrl,improvedStateDrawioUrl}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-80, -80],
+      "id": "95701d80-df0d-4b4b-9d63-40b0b0ec3647",
+      "name": "Create Draw.io Link"
+    },
+    {
+      "parameters": {
+        "assignments": {"assignments": [{"id": "92dbefac-b932-40e0-8c42-51c3f82b3197", "name": "output", "value": "={{ $json.output }}", "type": "string"}]},
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [180, -80],
+      "id": "12806340-c7ac-4ddc-8d0f-a05c0dceab01",
+      "name": "Return Final Analysis + Draw.io Links"
+    },
+    {
+      "parameters": {
+        "assignments": {"assignments": [{"id": "ccb90787-6080-4059-88af-50f3dfa504b9", "name": "output", "value": "={{ $json.output }}", "type": "string"}]},
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [-80, 100],
+      "id": "c78f3925-e2d9-4ca6-a0b9-53e0b970b7aa",
+      "name": "Return Discovery Response"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {"main": [[{"node": "Process Improvement AI Agent", "type": "main", "index": 0}]]},
+    "OpenAI Chat Model": {"ai_languageModel": [[{"node": "Process Improvement AI Agent", "type": "ai_languageModel", "index": 0}]]},
+    "Conversation Memory": {"ai_memory": [[{"node": "Process Improvement AI Agent", "type": "ai_memory", "index": 0}]]},
+    "Process Improvement AI Agent": {"main": [[{"node": "Ready to build?", "type": "main", "index": 0}]]},
+    "Ready to build?": {"main": [[{"node": "Create Draw.io Link", "type": "main", "index": 0}], [{"node": "Return Discovery Response", "type": "main", "index": 0}]]},
+    "Create Draw.io Link": {"main": [[{"node": "Return Final Analysis + Draw.io Links", "type": "main", "index": 0}]]}
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1", "binaryMode": "separate"},
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

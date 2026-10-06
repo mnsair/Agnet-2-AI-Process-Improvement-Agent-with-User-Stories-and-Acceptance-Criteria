@@ -1,0 +1,8 @@
+{
+  "name": "AI Process Flow Improvement Agent",
+  "description": "Interactive Business Process Improvement AI Agent that performs process discovery, identifies bottlenecks, designs traceable AS-IS and TO-BE workflows, renders live Mermaid diagrams, and generates direct draw.io links.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
