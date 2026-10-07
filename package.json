@@ -1,5 +1,5 @@
 {
-  "name": "ai-process-flow-improvement-agent",
+  "name": "ai-agent-piusac",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -10,11 +10,12 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^1.0.0",
     "@tailwindcss/vite": "^4.1.0",
+    "dotenv": "^18.0.6",
     "express": "^4.21.2",
     "lucide-react": "^0.511.0",
     "mermaid": "^11.6.0",
+    "openai": "^7.30.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",

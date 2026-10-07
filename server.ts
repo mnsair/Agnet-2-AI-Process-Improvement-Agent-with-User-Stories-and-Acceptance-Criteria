@@ -2,10 +2,13 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI, Type } from '@google/genai';
+import OpenAI from 'openai';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+dotenv.config(); // Load .env
+dotenv.config({ path: path.resolve(__dirname, '.env.local'), override: true }); // Load .env.local
 
 const DEFAULT_SYSTEM_MESSAGE = `ROLE
 You are a Senior Systems Analyst, Business Systems Analyst, Agile Product Owner, and QA Lead. Help users discover, document, analyze, and improve business and technology-enabled processes, and write complete Engineering User Stories (with Positive, Negative, and Boundary Acceptance Criteria) and QA/UAT Test Cases in the same unified specification. Use only information supplied or reasonably established through discovery. Do not invent facts, metrics, systems, controls, or root causes.
@@ -172,22 +175,17 @@ async function startServer() {
         rawNotes,
       } = req.body || {};
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         res.status(500).json({
           error:
-            'GEMINI_API_KEY is not configured on the server. Please check Settings > Secrets.',
+            'OPENAI_API_KEY is not configured on the server. Please check Settings > Secrets.',
         });
         return;
       }
 
-      const ai = new GoogleGenAI({
+      const openai = new OpenAI({
         apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          },
-        },
       });
 
       const prompt = `Analyze the following business process and generate a complete, traceable Process Improvement & Agile Requirements Specification JSON object.
@@ -222,267 +220,266 @@ REQUIREMENTS FOR OUTPUT:
 7. Inside EVERY Functional User Story, include Acceptance Criteria covering Positive, Negative, AND Boundary scenarios (using Given / When / Then).
 8. Write a complete suite of Test Cases for both QA and UAT (at least 6 test cases across QA Positive, QA Negative, QA Boundary, and UAT End-to-End Control verification).`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          temperature: 0.2,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              processName: { type: Type.STRING },
-              documentVersion: { type: Type.STRING },
-              generatedAt: { type: Type.STRING },
-              businessObjective: { type: Type.STRING },
-              triggerCondition: { type: Type.STRING },
-              endCondition: { type: Type.STRING },
-              currentMetrics: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-              },
-              preservedControls: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-              },
-              executiveSummary: { type: Type.STRING },
-              asIsSteps: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    stepNumber: { type: Type.INTEGER },
-                    stepName: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    owner: { type: Type.STRING },
-                    system: { type: Type.STRING },
-                    input: { type: Type.STRING },
-                    output: { type: Type.STRING },
-                    bottleneckStatus: {
-                      type: Type.STRING,
-                      description: 'None, Confirmed Bottleneck, or Likely Bottleneck',
-                    },
-                    controlOrDependency: { type: Type.STRING },
-                  },
-                  required: [
-                    'stepNumber',
-                    'stepName',
-                    'description',
-                    'owner',
-                    'system',
-                    'input',
-                    'output',
-                    'bottleneckStatus',
-                    'controlOrDependency',
-                  ],
+      const schemaString = JSON.stringify({
+        type: 'object',
+        properties: {
+          processName: { type: 'string' },
+          documentVersion: { type: 'string' },
+          generatedAt: { type: 'string' },
+          businessObjective: { type: 'string' },
+          triggerCondition: { type: 'string' },
+          endCondition: { type: 'string' },
+          currentMetrics: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          preservedControls: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          executiveSummary: { type: 'string' },
+          asIsSteps: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                stepNumber: { type: 'number' },
+                stepName: { type: 'string' },
+                description: { type: 'string' },
+                owner: { type: 'string' },
+                system: { type: 'string' },
+                input: { type: 'string' },
+                output: { type: 'string' },
+                bottleneckStatus: {
+                  type: 'string',
+                  description: 'None, Confirmed Bottleneck, or Likely Bottleneck',
                 },
+                controlOrDependency: { type: 'string' },
               },
-              limitations: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    relatedSteps: { type: Type.STRING },
-                    title: { type: Type.STRING },
-                    evidence: { type: Type.STRING },
-                    classification: {
-                      type: Type.STRING,
-                      description: 'Confirmed Issue, Likely Bottleneck, or Root-Cause Hypothesis',
-                    },
-                    impact: { type: Type.STRING },
-                    priority: { type: Type.STRING, description: 'Critical, High, or Medium' },
-                    rootCauseHypothesis: { type: Type.STRING },
-                    recommendedAction: { type: Type.STRING },
-                  },
-                  required: [
-                    'id',
-                    'relatedSteps',
-                    'title',
-                    'evidence',
-                    'classification',
-                    'impact',
-                    'priority',
-                    'rootCauseHypothesis',
-                    'recommendedAction',
-                  ],
-                },
-              },
-              currentStateMermaid: {
-                type: Type.STRING,
-                description:
-                  'Valid Mermaid flowchart TD string for AS-IS process with classDef bottleneck',
-              },
-              recommendations: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    category: {
-                      type: Type.STRING,
-                      description:
-                        'Automation, Integration, Workflow, Data Quality, or Governance & Control',
-                    },
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    addressesLimitation: { type: Type.STRING },
-                    preservedControls: { type: Type.STRING },
-                    expectedBenefit: { type: Type.STRING },
-                  },
-                  required: [
-                    'id',
-                    'category',
-                    'title',
-                    'description',
-                    'addressesLimitation',
-                    'preservedControls',
-                    'expectedBenefit',
-                  ],
-                },
-              },
-              toBeSteps: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    stepNumber: { type: Type.INTEGER },
-                    stepName: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    owner: { type: Type.STRING },
-                    system: { type: Type.STRING },
-                    improvementType: {
-                      type: Type.STRING,
-                      description: 'Automated, Integrated, Streamlined, or Control Preserved',
-                    },
-                    controlOrDependency: { type: Type.STRING },
-                    kpiTarget: { type: Type.STRING },
-                  },
-                  required: [
-                    'stepNumber',
-                    'stepName',
-                    'description',
-                    'owner',
-                    'system',
-                    'improvementType',
-                    'controlOrDependency',
-                    'kpiTarget',
-                  ],
-                },
-              },
-              improvedStateMermaid: {
-                type: Type.STRING,
-                description:
-                  'Valid Mermaid flowchart TD string for TO-BE process with classDef improved',
-              },
-              functionalStories: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    storyId: { type: Type.STRING },
-                    title: { type: Type.STRING },
-                    persona: { type: Type.STRING },
-                    relatedToBeSteps: { type: Type.STRING },
-                    priority: { type: Type.STRING },
-                    storyPoints: { type: Type.INTEGER },
-                    userStoryStatement: { type: Type.STRING },
-                    businessValue: { type: Type.STRING },
-                    technicalNotes: { type: Type.STRING },
-                    acceptanceCriteria: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          id: { type: Type.STRING },
-                          scenarioType: {
-                            type: Type.STRING,
-                            description: 'Positive, Negative, or Boundary',
-                          },
-                          title: { type: Type.STRING },
-                          given: { type: Type.STRING },
-                          when: { type: Type.STRING },
-                          then: { type: Type.STRING },
-                        },
-                        required: ['id', 'scenarioType', 'title', 'given', 'when', 'then'],
-                      },
-                    },
-                  },
-                  required: [
-                    'storyId',
-                    'title',
-                    'persona',
-                    'relatedToBeSteps',
-                    'priority',
-                    'storyPoints',
-                    'userStoryStatement',
-                    'businessValue',
-                    'technicalNotes',
-                    'acceptanceCriteria',
-                  ],
-                },
-              },
-              testCases: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    testCaseId: { type: Type.STRING },
-                    linkedStoryId: { type: Type.STRING },
-                    suite: { type: Type.STRING, description: 'QA or UAT' },
-                    scenarioCategory: {
-                      type: Type.STRING,
-                      description: 'Positive, Negative, Boundary, or End-to-End Control',
-                    },
-                    title: { type: Type.STRING },
-                    preconditions: { type: Type.STRING },
-                    testSteps: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING },
-                    },
-                    testData: { type: Type.STRING },
-                    expectedResult: { type: Type.STRING },
-                    controlVerified: { type: Type.STRING },
-                  },
-                  required: [
-                    'testCaseId',
-                    'linkedStoryId',
-                    'suite',
-                    'scenarioCategory',
-                    'title',
-                    'preconditions',
-                    'testSteps',
-                    'testData',
-                    'expectedResult',
-                    'controlVerified',
-                  ],
-                },
-              },
+              required: [
+                'stepNumber',
+                'stepName',
+                'description',
+                'owner',
+                'system',
+                'input',
+                'output',
+                'bottleneckStatus',
+                'controlOrDependency',
+              ],
             },
-            required: [
-              'processName',
-              'documentVersion',
-              'generatedAt',
-              'businessObjective',
-              'triggerCondition',
-              'endCondition',
-              'currentMetrics',
-              'preservedControls',
-              'executiveSummary',
-              'asIsSteps',
-              'limitations',
-              'currentStateMermaid',
-              'recommendations',
-              'toBeSteps',
-              'improvedStateMermaid',
-              'functionalStories',
-              'testCases',
-            ],
+          },
+          limitations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                relatedSteps: { type: 'string' },
+                title: { type: 'string' },
+                evidence: { type: 'string' },
+                classification: {
+                  type: 'string',
+                  description: 'Confirmed Issue, Likely Bottleneck, or Root-Cause Hypothesis',
+                },
+                impact: { type: 'string' },
+                priority: { type: 'string', description: 'Critical, High, or Medium' },
+                rootCauseHypothesis: { type: 'string' },
+                recommendedAction: { type: 'string' },
+              },
+              required: [
+                'id',
+                'relatedSteps',
+                'title',
+                'evidence',
+                'classification',
+                'impact',
+                'priority',
+                'rootCauseHypothesis',
+                'recommendedAction',
+              ],
+            },
+          },
+          currentStateMermaid: {
+            type: 'string',
+            description:
+              'Valid Mermaid flowchart TD string for AS-IS process with classDef bottleneck',
+          },
+          recommendations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                category: {
+                  type: 'string',
+                  description:
+                    'Automation, Integration, Workflow, Data Quality, or Governance & Control',
+                },
+                title: { type: 'string' },
+                description: { type: 'string' },
+                addressesLimitation: { type: 'string' },
+                preservedControls: { type: 'string' },
+                expectedBenefit: { type: 'string' },
+              },
+              required: [
+                'id',
+                'category',
+                'title',
+                'description',
+                'addressesLimitation',
+                'preservedControls',
+                'expectedBenefit',
+              ],
+            },
+          },
+          toBeSteps: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                stepNumber: { type: 'number' },
+                stepName: { type: 'string' },
+                description: { type: 'string' },
+                owner: { type: 'string' },
+                system: { type: 'string' },
+                improvementType: {
+                  type: 'string',
+                  description: 'Automated, Integrated, Streamlined, or Control Preserved',
+                },
+                controlOrDependency: { type: 'string' },
+                kpiTarget: { type: 'string' },
+              },
+              required: [
+                'stepNumber',
+                'stepName',
+                'description',
+                'owner',
+                'system',
+                'improvementType',
+                'controlOrDependency',
+                'kpiTarget',
+              ],
+            },
+          },
+          improvedStateMermaid: {
+            type: 'string',
+            description:
+              'Valid Mermaid flowchart TD string for TO-BE process with classDef improved',
+          },
+          functionalStories: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                storyId: { type: 'string' },
+                title: { type: 'string' },
+                persona: { type: 'string' },
+                relatedToBeSteps: { type: 'string' },
+                priority: { type: 'string' },
+                storyPoints: { type: 'number' },
+                userStoryStatement: { type: 'string' },
+                businessValue: { type: 'string' },
+                technicalNotes: { type: 'string' },
+                acceptanceCriteria: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      scenarioType: {
+                        type: 'string',
+                        description: 'Positive, Negative, or Boundary',
+                      },
+                      title: { type: 'string' },
+                      given: { type: 'string' },
+                      when: { type: 'string' },
+                      then: { type: 'string' },
+                    },
+                    required: ['id', 'scenarioType', 'title', 'given', 'when', 'then'],
+                  },
+                },
+              },
+              required: [
+                'storyId',
+                'title',
+                'persona',
+                'relatedToBeSteps',
+                'priority',
+                'storyPoints',
+                'userStoryStatement',
+                'businessValue',
+                'technicalNotes',
+                'acceptanceCriteria',
+              ],
+            },
+          },
+          testCases: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                testCaseId: { type: 'string' },
+                linkedStoryId: { type: 'string' },
+                suite: { type: 'string', description: 'QA or UAT' },
+                scenarioCategory: {
+                  type: 'string',
+                  description: 'Positive, Negative, Boundary, or End-to-End Control',
+                },
+                title: { type: 'string' },
+                preconditions: { type: 'string' },
+                testSteps: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                testData: { type: 'string' },
+                expectedResult: { type: 'string' },
+                controlVerified: { type: 'string' },
+              },
+              required: [
+                'testCaseId',
+                'linkedStoryId',
+                'suite',
+                'scenarioCategory',
+                'title',
+                'preconditions',
+                'testSteps',
+                'testData',
+                'expectedResult',
+                'controlVerified',
+              ],
+            },
           },
         },
+        required: [
+          'processName',
+          'documentVersion',
+          'generatedAt',
+          'businessObjective',
+          'triggerCondition',
+          'endCondition',
+          'currentMetrics',
+          'preservedControls',
+          'executiveSummary',
+          'asIsSteps',
+          'limitations',
+          'currentStateMermaid',
+          'recommendations',
+          'toBeSteps',
+          'improvedStateMermaid',
+          'functionalStories',
+          'testCases',
+        ],
       });
 
-      const rawJson = (response.text || '{}').trim();
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        temperature: 0.2,
+        messages: [{ role: 'user', content: prompt + '\n\nIMPORTANT: Respond ONLY with a valid JSON object matching this schema:\n' + schemaString }],
+        response_format: { type: 'json_object' },
+      });
+
+      const rawJson = (response.choices[0].message.content || '{}').trim();
       const parsed = JSON.parse(rawJson);
 
       const cleanAsIsMermaid = (parsed.currentStateMermaid || '')
@@ -533,51 +530,46 @@ REQUIREMENTS FOR OUTPUT:
         return;
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         res.status(500).json({
           error:
-            'GEMINI_API_KEY is not configured on the server. Please check Settings > Secrets.',
+            'OPENAI_API_KEY is not configured on the server. Please check Settings > Secrets.',
         });
         return;
       }
 
-      const ai = new GoogleGenAI({
+      const openai = new OpenAI({
         apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          },
-        },
       });
 
       const history = memoryStore.get(sessionId) || [];
       const windowedHistory = history.slice(-CONTEXT_WINDOW_LENGTH);
 
-      const contents = [
+      const messages: any[] = [
+        {
+          role: 'system',
+          content: systemInstruction && systemInstruction.trim()
+            ? systemInstruction
+            : DEFAULT_SYSTEM_MESSAGE
+        },
         ...windowedHistory.map((turn) => ({
-          role: turn.role,
-          parts: [{ text: turn.text }],
+          role: turn.role === 'model' ? 'assistant' : 'user',
+          content: turn.text,
         })),
         {
           role: 'user',
-          parts: [{ text: message }],
+          content: message,
         },
       ];
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents,
-        config: {
-          systemInstruction:
-            systemInstruction && systemInstruction.trim()
-              ? systemInstruction
-              : DEFAULT_SYSTEM_MESSAGE,
-          temperature: 0.3,
-        },
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages,
+        temperature: 0.3,
       });
 
-      const rawText = response.text || '';
+      const rawText = response.choices[0].message.content || '';
 
       const newTurns: ChatTurn[] = [
         ...windowedHistory,

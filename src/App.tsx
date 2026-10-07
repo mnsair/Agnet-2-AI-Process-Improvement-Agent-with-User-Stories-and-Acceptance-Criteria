@@ -451,13 +451,24 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveView('chat')}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`relative py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 activeView === 'chat'
                   ? 'text-white border-b-2 border-sky-400 font-semibold'
-                  : 'hover:text-slate-200'
+                  : 'text-sky-300 font-semibold drop-shadow-[0_0_8px_rgba(56,189,248,0.8)] hover:text-sky-200'
               }`}
             >
               Discovery Chat
+              {activeView !== 'chat' && (
+                <>
+                  <span className="absolute -top-1 -right-3 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500 shadow-[0_0_8px_rgba(56,189,248,1)]"></span>
+                  </span>
+                  <span className="absolute top-8 left-1/2 -translate-x-1/2 bg-sky-500 text-slate-950 text-[10px] font-bold px-2 py-1 rounded shadow-[0_0_12px_rgba(56,189,248,0.6)] whitespace-nowrap animate-bounce before:content-[''] before:absolute before:-top-1 before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-b-sky-500">
+                    Start Here
+                  </span>
+                </>
+              )}
             </button>
           </nav>
 
@@ -523,11 +534,19 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveView('chat')}
-            className={`whitespace-nowrap shrink-0 ${
-              activeView === 'chat' ? 'text-sky-400 font-semibold' : ''
+            className={`relative whitespace-nowrap shrink-0 ${
+              activeView === 'chat' 
+                ? 'text-sky-400 font-semibold' 
+                : 'text-sky-300 font-semibold drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]'
             }`}
           >
             Discovery Chat
+            {activeView !== 'chat' && (
+              <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+              </span>
+            )}
           </button>
         </div>
       </header>
