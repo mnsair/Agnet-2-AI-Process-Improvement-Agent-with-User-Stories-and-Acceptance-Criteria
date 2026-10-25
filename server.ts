@@ -1,3 +1,4 @@
+import { piusacRouter } from './piusac-api';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
@@ -124,6 +125,7 @@ function processAgentOutput(aiResponse: string) {
 
 async function startServer() {
   const app = express();
+  app.use('/api/piusac', piusacRouter);
   app.use(express.json({ limit: '4mb' }));
 
   app.get('/api/workflow', (_req, res) => {
@@ -615,3 +617,4 @@ REQUIREMENTS FOR OUTPUT:
 }
 
 startServer();
+
