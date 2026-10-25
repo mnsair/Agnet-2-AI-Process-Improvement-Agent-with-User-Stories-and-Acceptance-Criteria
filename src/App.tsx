@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -12,13 +12,6 @@ import {
   Search,
   Play,
   FileText,
-  Upload,
-  MessageSquare,
-  X,
-  FolderOpen,
-  PlusCircle,
-  AlertTriangle,
-  Sparkles,
 } from 'lucide-react';
 import { MermaidDiagram } from './components/MermaidDiagram';
 import {
@@ -39,16 +32,6 @@ interface ChatMessage {
   currentStateDrawioUrl?: string;
   improvedStateDrawioUrl?: string;
 }
-
-interface Project {
-  id: string;
-  name: string;
-  createdAt: string;
-  spec: ProcessPortalSpec;
-  messages: ChatMessage[];
-}
-
-type MainView = 'landing' | 'document' | 'intake' | 'diagrams' | 'stories-qa' | 'chat';
 
 const PRESET_PROCESSES = [
   {
@@ -113,66 +96,54 @@ const PRESET_PROCESSES = [
 ];
 
 export default function App() {
-  // ── View State ──
-  const [activeView, setActiveView] = useState<MainView>('landing');
-  const [hasActiveProcess, setHasActiveProcess] = useState(false);
+  const [activeView, setActiveView] = useState<
+    'document' | 'intake' | 'diagrams' | 'stories-qa' | 'chat'
+  >('document');
 
-  // ── Spec ──
   const [spec, setSpec] = useState<ProcessPortalSpec>(DEFAULT_PORTAL_SPEC);
   const [analyzingPortal, setAnalyzingPortal] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
 
-  // ── Intake Form ──
-  const [processName, setProcessName] = useState('');
-  const [businessObjective, setBusinessObjective] = useState('');
-  const [triggerCondition, setTriggerCondition] = useState('');
-  const [endCondition, setEndCondition] = useState('');
-  const [processStepsText, setProcessStepsText] = useState('');
-  const [knownBottlenecksText, setKnownBottlenecksText] = useState('');
-  const [currentMetricsText, setCurrentMetricsText] = useState('');
-  const [requiredControlsText, setRequiredControlsText] = useState('');
+  // Portal Intake Form State
+  const [processName, setProcessName] = useState(PRESET_PROCESSES[0].processName);
+  const [businessObjective, setBusinessObjective] = useState(
+    PRESET_PROCESSES[0].businessObjective
+  );
+  const [triggerCondition, setTriggerCondition] = useState(
+    PRESET_PROCESSES[0].triggerCondition
+  );
+  const [endCondition, setEndCondition] = useState(PRESET_PROCESSES[0].endCondition);
+  const [processStepsText, setProcessStepsText] = useState(
+    PRESET_PROCESSES[0].processStepsText
+  );
+  const [knownBottlenecksText, setKnownBottlenecksText] = useState(
+    PRESET_PROCESSES[0].knownBottlenecksText
+  );
+  const [currentMetricsText, setCurrentMetricsText] = useState(
+    PRESET_PROCESSES[0].currentMetricsText
+  );
+  const [requiredControlsText, setRequiredControlsText] = useState(
+    PRESET_PROCESSES[0].requiredControlsText
+  );
   const [rawNotes, setRawNotes] = useState('');
 
-  // ── File Upload ──
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadLoading, setUploadLoading] = useState(false);
-  const [landingChatInput, setLandingChatInput] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // ── Stories & QA Filters ──
+  // Filters for Stories & QA Matrix view
   const [acScenarioFilter, setAcScenarioFilter] = useState<
     'All' | 'Positive' | 'Negative' | 'Boundary'
   >('All');
   const [testSuiteFilter, setTestSuiteFilter] = useState<'All' | 'QA' | 'UAT'>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ── Chat ──
-  const [sessionId] = useState(() => 'session-' + Math.random().toString(36).slice(2, 10));
+  // Interactive Chat State
+  const [sessionId] = useState(
+    () => 'session-' + Math.random().toString(36).slice(2, 10)
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // ── Projects Sidebar ──
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // ── Before-unload warning ──
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (hasActiveProcess) {
-        e.preventDefault();
-        e.returnValue = 'Your work is not saved — once you close this window, all process data, stories, and diagrams will be lost. Please download your work first.';
-        return e.returnValue;
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [hasActiveProcess]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -194,108 +165,52 @@ export default function App() {
     }
   };
 
-  /** Called after a spec is ready – activate the process workspace */
-  const activateSpec = (newSpec: ProcessPortalSpec) => {
-    setSpec(newSpec);
-    setHasActiveProcess(true);
-    setActiveView('document');
-    setProjects((prev) => [
-      { id: 'proj-' + Date.now(), name: newSpec.processName, createdAt: new Date().toLocaleDateString(), spec: newSpec, messages },
-      ...prev,
-    ]);
-  };
-
-  /** Start New Process – resets state and returns to landing */
-  const handleStartNewProcess = () => {
-    if (hasActiveProcess) {
-      const ok = window.confirm('Starting a new process will clear your current work. Download it first if needed. Continue?');
-      if (!ok) return;
-    }
-    setHasActiveProcess(false);
-    setActiveView('landing');
-    setMessages([]);
-    setChatInput('');
-    setLandingChatInput('');
-    setUploadedFileName(null);
-    setUploadError(null);
-    setProcessName('');
-    setBusinessObjective('');
-    setTriggerCondition('');
-    setEndCondition('');
-    setProcessStepsText('');
-    setKnownBottlenecksText('');
-    setCurrentMetricsText('');
-    setRequiredControlsText('');
-    setRawNotes('');
-    setChatOpen(false);
-  };
-
-  /** File upload handler */
-  const handleFileUpload = useCallback(async (file: File) => {
-    setUploadError(null);
-    setUploadLoading(true);
-    setUploadedFileName(file.name);
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!['txt', 'md', 'pdf', 'docx', 'doc'].includes(ext ?? '')) {
-      setUploadError('Unsupported file type. Please upload a .txt, .md, .pdf, or .docx file.');
-      setUploadLoading(false);
-      return;
-    }
-    try {
-      let text = '';
-      if (ext === 'txt' || ext === 'md') {
-        text = await file.text();
-      } else {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch('/api/upload/extract', { method: 'POST', body: formData });
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error((d as {error?:string}).error || 'Failed to extract text from file.'); }
-        const d = await res.json();
-        text = (d as {text?:string}).text || '';
-      }
-      if (!text.trim()) { setUploadError('Could not extract text from the file. Please try a plain text file.'); setUploadLoading(false); return; }
-      setLandingChatInput(`I am uploading my current process document titled "${file.name}".\n\n${text.trim()}`);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Error reading file.');
-    } finally {
-      setUploadLoading(false);
-    }
-  }, []);
-
-  const handleFileDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) handleFileUpload(file);
-  }, [handleFileUpload]);
-
   const handleAnalyzeProcessPortal = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (analyzingPortal) return;
+
     setPortalError(null);
     setAnalyzingPortal(true);
+
     try {
       const res = await fetch('/api/portal/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          processName, businessObjective, triggerCondition, endCondition,
-          processStepsText, knownBottlenecksText, currentMetricsText, requiredControlsText, rawNotes,
+          processName,
+          businessObjective,
+          triggerCondition,
+          endCondition,
+          processStepsText,
+          knownBottlenecksText,
+          currentMetricsText,
+          requiredControlsText,
+          rawNotes,
         }),
       });
-      const data = await res.json() as { spec?: ProcessPortalSpec; error?: string };
-      if (!res.ok) throw new Error(data.error || 'Failed to analyze process flow.');
-      if (data.spec) activateSpec(data.spec);
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to analyze process flow.');
+      }
+
+      if (data.spec) {
+        setSpec(data.spec);
+        setActiveView('document');
+      }
     } catch (err: unknown) {
-      setPortalError(err instanceof Error ? err.message : 'Error generating portal specification.');
+      setPortalError(
+        err instanceof Error ? err.message : 'Error generating portal specification.'
+      );
     } finally {
       setAnalyzingPortal(false);
     }
   };
 
-  /** Core chat send used by landing page and floating panel */
   const handleSendChat = async (overridePrompt?: string) => {
     const textToSend = (overridePrompt ?? chatInput).trim();
     if (!textToSend || chatLoading) return;
+
     setChatError(null);
     if (!overridePrompt) setChatInput('');
 
@@ -303,8 +218,12 @@ export default function App() {
       id: 'user-' + Date.now(),
       role: 'user',
       content: textToSend,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
     };
+
     setMessages((prev) => [...prev, userMsg]);
     setChatLoading(true);
 
@@ -312,55 +231,66 @@ export default function App() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToSend, sessionId }),
+        body: JSON.stringify({
+          message: textToSend,
+          sessionId,
+        }),
       });
-      const data = await res.json() as {
-        output: string; error?: string; processFlowReady?: boolean;
-        currentStateMermaid?: string; improvedStateMermaid?: string;
-        currentStateDrawioUrl?: string; improvedStateDrawioUrl?: string;
-      };
-      if (!res.ok) throw new Error(data.error || 'Failed to communicate with AI Agent.');
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to communicate with AI Agent.');
+      }
 
       const agentMsg: ChatMessage = {
         id: 'agent-' + Date.now(),
         role: 'agent',
         content: data.output,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
         processFlowReady: data.processFlowReady,
         currentStateMermaid: data.currentStateMermaid,
         improvedStateMermaid: data.improvedStateMermaid,
         currentStateDrawioUrl: data.currentStateDrawioUrl,
         improvedStateDrawioUrl: data.improvedStateDrawioUrl,
       };
+
       setMessages((prev) => [...prev, agentMsg]);
 
-      if (data.processFlowReady && data.currentStateMermaid && data.improvedStateMermaid) {
+      // If chat produced new AS-IS and TO-BE Mermaid diagrams, update the live diagram links in the portal spec too
+      if (
+        data.processFlowReady &&
+        data.currentStateMermaid &&
+        data.improvedStateMermaid
+      ) {
         setSpec((prev) => ({
           ...prev,
-          currentStateMermaid: data.currentStateMermaid!,
-          improvedStateMermaid: data.improvedStateMermaid!,
-          currentStateDrawioUrl: data.currentStateDrawioUrl || buildDrawioUrl(data.currentStateMermaid!, 'AS-IS Process'),
-          improvedStateDrawioUrl: data.improvedStateDrawioUrl || buildDrawioUrl(data.improvedStateMermaid!, 'TO-BE Process'),
+          currentStateMermaid: data.currentStateMermaid,
+          improvedStateMermaid: data.improvedStateMermaid,
+          currentStateDrawioUrl:
+            data.currentStateDrawioUrl ||
+            buildDrawioUrl(data.currentStateMermaid, 'AS-IS Process'),
+          improvedStateDrawioUrl:
+            data.improvedStateDrawioUrl ||
+            buildDrawioUrl(data.improvedStateMermaid, 'TO-BE Process'),
         }));
       }
     } catch (err: unknown) {
-      setChatError(err instanceof Error ? err.message : 'Error communicating with chat endpoint.');
+      setChatError(
+        err instanceof Error ? err.message : 'Error communicating with chat endpoint.'
+      );
     } finally {
       setChatLoading(false);
     }
   };
 
-  /** Landing page submit */
-  const handleLandingSubmit = async (override?: string) => {
-    const text = (override ?? landingChatInput).trim();
-    if (!text || chatLoading) return;
-    setLandingChatInput('');
-    await handleSendChat(text);
-  };
-
   const handleConvertChatToFullPortalSpec = async () => {
     if (messages.length === 0 || analyzingPortal) return;
-    const transcript = messages.map((m) => `${m.role.toUpperCase()}:\n${m.content}`).join('\n\n---\n\n');
+    const transcript = messages
+      .map((m) => `${m.role.toUpperCase()}:\n${m.content}`)
+      .join('\n\n---\n\n');
     setRawNotes(transcript);
     setAnalyzingPortal(true);
     setPortalError(null);
@@ -370,19 +300,26 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           processName: processName || 'Chat-Discovered Business Process',
-          businessObjective, triggerCondition, endCondition,
-          processStepsText, knownBottlenecksText, currentMetricsText,
-          requiredControlsText, rawNotes: transcript,
+          businessObjective,
+          triggerCondition,
+          endCondition,
+          processStepsText,
+          knownBottlenecksText,
+          currentMetricsText,
+          requiredControlsText,
+          rawNotes: transcript,
         }),
       });
-      const data = await res.json() as { spec?: ProcessPortalSpec; error?: string };
+      const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to build specification');
       if (data.spec) {
-        activateSpec(data.spec);
-        setChatOpen(false);
+        setSpec(data.spec);
+        setActiveView('document');
       }
     } catch (err: unknown) {
-      setChatError(err instanceof Error ? err.message : 'Failed to convert chat to specification');
+      setChatError(
+        err instanceof Error ? err.message : 'Failed to convert chat to specification'
+      );
     } finally {
       setAnalyzingPortal(false);
     }
@@ -450,231 +387,268 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      {/* ══ HEADER ══ */}
-      <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur-sm no-print">
-        <div className="max-w-[1440px] mx-auto px-4 h-16 flex items-center justify-between gap-4">
-          {/* Logo */}
-          <button type="button" onClick={() => hasActiveProcess ? setActiveView('document') : setActiveView('landing')}
-            className="text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0 cursor-pointer hover:text-sky-300 transition-colors">
+      {/* Strict 3-Zone Top Bar Contract */}
+      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur-sm no-print">
+        <div className="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between gap-6">
+          {/* Zone 1: Single text element wordmark */}
+          <a
+            href="#top"
+            onClick={(e) => {
+              e.preventDefault();
+              setActiveView('document');
+            }}
+            className="text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0 no-underline"
+          >
             ProcessFlow Portal
-          </button>
+          </a>
 
-          {/* Nav – only when process is active */}
-          {hasActiveProcess && (
-            <nav className="hidden md:flex items-center gap-5 text-sm font-medium text-slate-400">
-              {([{ key: 'document', label: 'Unified Document' }, { key: 'intake', label: 'Process Intake' }, { key: 'diagrams', label: 'Draw.io Flows' }, { key: 'stories-qa', label: 'Stories & QA' }] as {key: MainView; label: string}[]).map(({ key, label }) => (
-                <button key={key} type="button" onClick={() => setActiveView(key)}
-                  className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                    activeView === key ? 'text-white border-b-2 border-sky-400 font-semibold' : 'hover:text-slate-200'
-                  }`}>{label}</button>
-              ))}
-            </nav>
-          )}
-
-          {/* Right actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button type="button" onClick={handleStartNewProcess}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-950 bg-sky-400 hover:bg-sky-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer">
-              <PlusCircle className="w-3.5 h-3.5" />Start New Process
+          {/* Zone 2: 5 clean text navigation links */}
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
+            <button
+              type="button"
+              onClick={() => setActiveView('document')}
+              className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeView === 'document'
+                  ? 'text-white border-b-2 border-sky-400 font-semibold'
+                  : 'hover:text-slate-200'
+              }`}
+            >
+              Unified Document
             </button>
-            {hasActiveProcess && (
-              <>
-                <button type="button" onClick={() => setChatOpen((o) => !o)}
-                  className={`relative inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                    chatOpen ? 'bg-indigo-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                  }`}>
-                  <MessageSquare className="w-3.5 h-3.5" />AI Chat
-                  {messages.length > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-sky-400 text-[9px] font-bold text-slate-950">{messages.length}</span>
-                  )}
-                </button>
-                <button type="button" onClick={handleDownloadUnifiedMarkdown}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap cursor-pointer">
-                  <Download className="w-3.5 h-3.5" />Export .md
-                </button>
-                <button type="button" onClick={() => window.print()}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-950 bg-emerald-400 rounded-lg hover:bg-emerald-300 transition-colors whitespace-nowrap cursor-pointer">
-                  <Printer className="w-3.5 h-3.5" />Print / PDF
-                </button>
-              </>
-            )}
-            <button type="button" onClick={() => setSidebarOpen((o) => !o)} title="Projects"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-300 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">
-              <FolderOpen className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Projects</span>
-              {projects.length > 0 && (
-                <span className="bg-slate-700 text-slate-200 rounded-full px-1.5 text-[10px] font-semibold">{projects.length}</span>
+            <button
+              type="button"
+              onClick={() => setActiveView('intake')}
+              className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeView === 'intake'
+                  ? 'text-white border-b-2 border-sky-400 font-semibold'
+                  : 'hover:text-slate-200'
+              }`}
+            >
+              Process Intake
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('diagrams')}
+              className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeView === 'diagrams'
+                  ? 'text-white border-b-2 border-sky-400 font-semibold'
+                  : 'hover:text-slate-200'
+              }`}
+            >
+              Draw.io Flows
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('stories-qa')}
+              className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeView === 'stories-qa'
+                  ? 'text-white border-b-2 border-sky-400 font-semibold'
+                  : 'hover:text-slate-200'
+              }`}
+            >
+              Stories &amp; QA
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('chat')}
+              className={`relative py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeView === 'chat'
+                  ? 'text-white border-b-2 border-sky-400 font-semibold'
+                  : 'text-sky-300 font-semibold drop-shadow-[0_0_8px_rgba(56,189,248,0.8)] hover:text-sky-200'
+              }`}
+            >
+              Discovery Chat
+              {activeView !== 'chat' && (
+                <>
+                  <span className="absolute -top-1 -right-3 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500 shadow-[0_0_8px_rgba(56,189,248,1)]"></span>
+                  </span>
+                  <span className="absolute top-8 left-1/2 -translate-x-1/2 bg-sky-500 text-slate-950 text-[10px] font-bold px-2 py-1 rounded shadow-[0_0_12px_rgba(56,189,248,0.6)] whitespace-nowrap animate-bounce before:content-[''] before:absolute before:-top-1 before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-b-sky-500">
+                    Start Here
+                  </span>
+                </>
               )}
             </button>
+          </nav>
+
+          {/* Zone 3: 2 primary actions */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleDownloadUnifiedMarkdown}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export Document (.md)
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-950 bg-sky-400 rounded-lg hover:bg-sky-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Print / Save PDF
+            </button>
           </div>
         </div>
 
-        {/* Mobile nav */}
-        {hasActiveProcess && (
-          <div className="flex md:hidden items-center gap-4 px-4 py-2 border-t border-slate-800/80 overflow-x-auto text-xs font-medium text-slate-400">
-            {([{ key: 'document', label: 'Document' }, { key: 'intake', label: 'Intake' }, { key: 'diagrams', label: 'Flows' }, { key: 'stories-qa', label: 'Stories' }] as {key: MainView; label: string}[]).map(({ key, label }) => (
-              <button key={key} type="button" onClick={() => setActiveView(key)}
-                className={`whitespace-nowrap shrink-0 ${activeView === key ? 'text-sky-400 font-semibold' : ''}`}>{label}</button>
-            ))}
-          </div>
-        )}
-      </header>
-
-      {/* Unsaved data banner */}
-      {hasActiveProcess && (
-        <div className="no-print bg-amber-950/60 border-b border-amber-700/40 px-4 py-2 flex items-center justify-between gap-3 text-xs text-amber-300">
-          <span className="flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            <strong>Unsaved session</strong> – This tool doesn't save data after you close the window.
-          </span>
-          <button type="button" onClick={handleDownloadUnifiedMarkdown}
-            className="flex items-center gap-1 px-2.5 py-1 bg-amber-700/50 hover:bg-amber-700/80 rounded text-amber-200 font-semibold whitespace-nowrap transition-colors cursor-pointer">
-            <Download className="w-3 h-3" />Download Now
+        {/* Mobile navigation bar */}
+        <div className="flex md:hidden items-center gap-4 px-6 py-2.5 border-t border-slate-800/80 overflow-x-auto text-xs font-medium text-slate-400">
+          <button
+            type="button"
+            onClick={() => setActiveView('document')}
+            className={`whitespace-nowrap shrink-0 ${
+              activeView === 'document' ? 'text-sky-400 font-semibold' : ''
+            }`}
+          >
+            Unified Document
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('intake')}
+            className={`whitespace-nowrap shrink-0 ${
+              activeView === 'intake' ? 'text-sky-400 font-semibold' : ''
+            }`}
+          >
+            Process Intake
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('diagrams')}
+            className={`whitespace-nowrap shrink-0 ${
+              activeView === 'diagrams' ? 'text-sky-400 font-semibold' : ''
+            }`}
+          >
+            Draw.io Flows
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('stories-qa')}
+            className={`whitespace-nowrap shrink-0 ${
+              activeView === 'stories-qa' ? 'text-sky-400 font-semibold' : ''
+            }`}
+          >
+            Stories &amp; QA
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('chat')}
+            className={`relative whitespace-nowrap shrink-0 ${
+              activeView === 'chat' 
+                ? 'text-sky-400 font-semibold' 
+                : 'text-sky-300 font-semibold drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]'
+            }`}
+          >
+            Discovery Chat
+            {activeView !== 'chat' && (
+              <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+              </span>
+            )}
           </button>
         </div>
-      )}
+      </header>
 
-      {/* ══ BODY ══ */}
-      <div className="flex flex-1 overflow-hidden relative">
+      {/* Main Workspace Container (1440px baseline) */}
+      <div className="flex-1 max-w-[1440px] w-full mx-auto px-6 py-8 flex flex-col lg:flex-row gap-8">
+        {/* Left Sidebar Navigation & Quick Process Switcher */}
+        <aside className="w-full lg:w-64 shrink-0 space-y-6 no-print">
+          <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-3">
+            <div className="text-xs font-semibold text-slate-300">
+              Active Process Specification
+            </div>
+            <div className="text-sm font-semibold text-white leading-snug">
+              {spec.processName}
+            </div>
+            <div className="text-xs text-slate-400 tabular-nums">
+              <span>v{spec.documentVersion}</span>
+              <span aria-hidden="true"> · </span>
+              <span>{spec.asIsSteps.length} AS-IS Steps</span>
+              <span aria-hidden="true"> · </span>
+              <span>{spec.toBeSteps.length} TO-BE Steps</span>
+            </div>
+            <div className="text-xs text-slate-400 tabular-nums">
+              <span>{spec.functionalStories.length} User Stories</span>
+              <span aria-hidden="true"> · </span>
+              <span>{spec.testCases.length} QA/UAT Cases</span>
+            </div>
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveView('intake')}
+                className="w-full px-3 py-2 rounded-md text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-slate-950 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                Analyze New / Edit Process
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyUnifiedMarkdown}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                {copiedMarkdown ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+                {copiedMarkdown ? 'Copied Full Markdown' : 'Copy Full Document'}
+              </button>
+            </div>
+          </div>
 
-        {/* Projects Sidebar */}
-        <aside className={`no-print fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 border-r border-slate-800 flex flex-col transform transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`} style={{ top: '64px' }}>
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-            <div className="text-sm font-semibold text-white">Projects (Session)</div>
-            <button type="button" onClick={() => setSidebarOpen(false)} className="text-slate-400 hover:text-white cursor-pointer"><X className="w-4 h-4" /></button>
+          {/* Document Section Outline */}
+          <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-2.5">
+            <div className="text-xs font-semibold text-slate-300 mb-2">
+              Unified Document Sections
+            </div>
+            {[
+              { id: 'sec-1-current', label: '01. Current Process (AS-IS)' },
+              { id: 'sec-2-limitations', label: '02. Process Limitations & Bottlenecks' },
+              { id: 'sec-3-asis-flow', label: '03. Current AS-IS Flow Diagram' },
+              { id: 'sec-4-recommendations', label: '04. TO-BE Recommendations' },
+              { id: 'sec-5-tobe-flow', label: '05. TO-BE Process Flow Image' },
+              { id: 'sec-6-stories-ac', label: '06. Functional Stories & 07. Acceptance Criteria' },
+              { id: 'sec-8-test-cases', label: '08. QA & UAT Test Cases' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => scrollToSection(item.id)}
+                className="w-full text-left px-2.5 py-1.5 rounded text-xs text-slate-400 hover:text-white hover:bg-slate-800/70 transition-colors block truncate cursor-pointer"
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
-          <div className="p-3 text-xs text-slate-500 border-b border-slate-800/60">Projects are kept in memory for this session only.</div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {projects.length === 0 ? (
-              <div className="text-xs text-slate-500 text-center py-8">No projects yet. Start a new process to create one.</div>
-            ) : (
-              projects.map((proj) => (
-                <button key={proj.id} type="button"
-                  onClick={() => { setSpec(proj.spec); setMessages(proj.messages); setHasActiveProcess(true); setActiveView('document'); setSidebarOpen(false); }}
-                  className="w-full text-left p-3 rounded-lg border border-slate-800 bg-slate-950 hover:border-sky-500/50 hover:bg-slate-900 transition-colors cursor-pointer">
-                  <div className="text-xs font-semibold text-white truncate">{proj.name}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">{proj.createdAt}</div>
-                </button>
-              ))
-            )}
-          </div>
-          <div className="p-3 border-t border-slate-800">
-            <button type="button" onClick={() => { setSidebarOpen(false); handleStartNewProcess(); }}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-sky-400 hover:bg-sky-300 text-slate-950 transition-colors cursor-pointer">
-              <PlusCircle className="w-3.5 h-3.5" />New Process
-            </button>
+
+          {/* Direct Draw.io Quick Links */}
+          <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-2.5">
+            <div className="text-xs font-semibold text-slate-300">
+              Direct draw.io Editors
+            </div>
+            <a
+              href={spec.currentStateDrawioUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium bg-slate-950 hover:bg-slate-800 text-red-300 border border-slate-800 transition-colors no-underline"
+            >
+              <span>Open AS-IS in draw.io</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            </a>
+            <a
+              href={spec.improvedStateDrawioUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium bg-slate-950 hover:bg-slate-800 text-emerald-300 border border-slate-800 transition-colors no-underline"
+            >
+              <span>Open TO-BE in draw.io</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            </a>
           </div>
         </aside>
 
-        {/* Sidebar overlay */}
-        {sidebarOpen && <div className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm" style={{ top: '64px' }} onClick={() => setSidebarOpen(false)} />}
-
-        {/* Main Scroll Area */}
-        <div className="flex-1 overflow-y-auto">
-          <div className={`max-w-[1440px] w-full mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8 transition-all duration-300 ${
-            chatOpen && hasActiveProcess ? 'lg:pr-[440px]' : ''
-          }`}>
-
-            {/* Left Sidebar – only when process active */}
-            {hasActiveProcess && activeView !== 'landing' && (
-              <aside className="w-full lg:w-64 shrink-0 space-y-5 no-print">
-                <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-3">
-                  <div className="text-xs font-semibold text-slate-300">
-                    Active Process Specification
-                  </div>
-                  <div className="text-sm font-semibold text-white leading-snug">
-                    {spec.processName}
-                  </div>
-                  <div className="text-xs text-slate-400 tabular-nums">
-                    <span>v{spec.documentVersion}</span>
-                    <span aria-hidden="true"> · </span>
-                    <span>{spec.asIsSteps.length} AS-IS Steps</span>
-                    <span aria-hidden="true"> · </span>
-                    <span>{spec.toBeSteps.length} TO-BE Steps</span>
-                  </div>
-                  <div className="text-xs text-slate-400 tabular-nums">
-                    <span>{spec.functionalStories.length} User Stories</span>
-                    <span aria-hidden="true"> · </span>
-                    <span>{spec.testCases.length} QA/UAT Cases</span>
-                  </div>
-                  <div className="pt-2 flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveView('intake')}
-                      className="w-full px-3 py-2 rounded-md text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-slate-950 transition-colors whitespace-nowrap cursor-pointer"
-                    >
-                      Analyze New / Edit Process
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCopyUnifiedMarkdown}
-                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors whitespace-nowrap cursor-pointer"
-                    >
-                      {copiedMarkdown ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                      {copiedMarkdown ? 'Copied Full Markdown' : 'Copy Full Document'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Document Section Outline */}
-                <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-2.5">
-                  <div className="text-xs font-semibold text-slate-300 mb-2">
-                    Unified Document Sections
-                  </div>
-                  {[
-                    { id: 'sec-1-current', label: '01. Current Process (AS-IS)' },
-                    { id: 'sec-2-limitations', label: '02. Process Limitations & Bottlenecks' },
-                    { id: 'sec-3-asis-flow', label: '03. Current AS-IS Flow Diagram' },
-                    { id: 'sec-4-recommendations', label: '04. TO-BE Recommendations' },
-                    { id: 'sec-5-tobe-flow', label: '05. TO-BE Process Flow Image' },
-                    { id: 'sec-6-stories-ac', label: '06. Functional Stories & 07. Acceptance Criteria' },
-                    { id: 'sec-8-test-cases', label: '08. QA & UAT Test Cases' },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => scrollToSection(item.id)}
-                      className="w-full text-left px-2.5 py-1.5 rounded text-xs text-slate-400 hover:text-white hover:bg-slate-800/70 transition-colors block truncate cursor-pointer"
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Direct Draw.io Quick Links */}
-                <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-2.5">
-                  <div className="text-xs font-semibold text-slate-300">
-                    Direct draw.io Editors
-                  </div>
-                  <a
-                    href={spec.currentStateDrawioUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium bg-slate-950 hover:bg-slate-800 text-red-300 border border-slate-800 transition-colors no-underline"
-                  >
-                    <span>Open AS-IS in draw.io</span>
-                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                  </a>
-                  <a
-                    href={spec.improvedStateDrawioUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium bg-slate-950 hover:bg-slate-800 text-emerald-300 border border-slate-800 transition-colors no-underline"
-                  >
-                    <span>Open TO-BE in draw.io</span>
-                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                  </a>
-                </div>
-              </aside>
-            )}
-
-            {/* Main Viewport */}
+        {/* Main Viewport */}
         <main className="flex-1 min-w-0">
           {/* VIEW 1: UNIFIED SPECIFICATION DOCUMENT (All 8 Required Sections in One Document) */}
           {activeView === 'document' && (
@@ -1863,7 +1837,5 @@ export default function App() {
         </main>
       </div>
     </div>
-  </div>
-</div>
   );
 }
